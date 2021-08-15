@@ -1,7 +1,7 @@
 /*
  *  FSK util for Asterisk
  *
- *  Copyright (C) 2013-2014 Alessandro Carminati <alessandro.carminati@gmail.com>
+ *  Copyright (C) 2013-2021 Alessandro Carminati <alessandro.carminati@gmail.com>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -34,8 +34,6 @@
 
 #include "asterisk.h"
 
-ASTERISK_FILE_VERSION(__FILE__, "$Revision: 5$")
-
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -58,6 +56,7 @@ ASTERISK_FILE_VERSION(__FILE__, "$Revision: 5$")
 #include "asterisk/app.h"
 #include "asterisk/dsp.h"
 #include "asterisk/manager.h"
+#include "asterisk/format_cache.h"
 
 /*** DOCUMENTATION
 	<application name="SendFSK" language="en_US">
@@ -130,13 +129,8 @@ struct transmit_buffer_s {
 typedef struct transmit_buffer_s transmit_buffer_t;
 typedef struct receive_buffer_s  receive_buffer_t;
 
-static const char app_fskTX[] =		"SendFSK";
-static const char app_fskRX[] =		"ReceiveFSK";
-static const char app_cidfsk[] =	"CidT2FSK";
-static const char app_fskRXHex[] =	"ReceiveFSKHex";
-
-
-
+static const char app_fskTX[] = "SendFSK";
+static const char app_fskRX[] = "ReceiveFSK";
 
 /*		  _    _		_			     _
 		 | |  | |	       | |			    | |
@@ -207,11 +201,18 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) {
 		.samples = BLOCK_LEN,
 		.data.ptr = &caller_amp,
 		};
+	struct ast_format * native_format;
+	unsigned int sampling_rate;
+	struct ast_format * write_format;
 	int samples;
 	int modem;
 	int res=0;
 
-	ast_format_set(&f.subclass.format, AST_FORMAT_SLINEAR, 0);
+	native_format = ast_format_cap_get_format(ast_channel_nativeformats(chan), 0);
+	sampling_rate = ast_format_get_sample_rate(native_format);
+	write_format = ast_format_cache_get_slin_by_rate(sampling_rate);
+	f.subclass.format = write_format;
+
 	if (ast_strlen_zero(data)) {
 		ast_log(LOG_WARNING, "SendFSK requires a text as argument\n");
 		return -1;
@@ -220,7 +221,7 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) {
 		ast_log(LOG_ERROR, "SendFSK channel is NULL. Giving up.\n");
 		return -1;
 		}
-	modem = FSK_BELL103CH2;
+	modem = FSK_BELL202;
 	out = (transmit_buffer_t *) malloc(sizeof(*out));
 	out->buffer = (char *) data;
 	out->bytes2send = strlen(data);
@@ -240,7 +241,7 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) {
 			ast_debug(1, "User pressed a key\n");
 			}
 		samples = fsk_tx(caller_tx, caller_amp, BLOCK_LEN);
-		if (res = ast_write(chan, &f) < 0) {
+		if ((res = ast_write(chan, &f)) < 0) {
 			res = -1;
 			ast_frfree(fr);
 			break;
@@ -280,7 +281,7 @@ static int fskRX_exec(struct ast_channel *chan, const char *data){
 	int res=0;                       //Assume channel is answered
 
 
-	modem =  FSK_BELL103CH2;
+	modem =  FSK_BELL202;
 	memset(output_frame, 0, sizeof(output_frame));
 	AST_DECLARE_APP_ARGS(arglist,
 		AST_APP_ARG(variable);
@@ -313,7 +314,7 @@ static int fskRX_exec(struct ast_channel *chan, const char *data){
 	if (!res) {
 		pbx_builtin_setvar_helper(chan, arglist.variable, ""); //initialyze variable
 		ast_debug(1, "Modem channel is  '%s'\n", preset_fsk_specs[modem].name);
-		if ((res = ast_set_read_format_by_id(chan, AST_FORMAT_SLINEAR)) < 0) {
+		if ((res = ast_set_read_format(chan, ast_format_slin)) < 0) {
 			ast_log(LOG_WARNING, "Unable to set channel to linear mode, giving up\n");
 			return -1;
 			}
@@ -340,7 +341,7 @@ static int fskRX_exec(struct ast_channel *chan, const char *data){
 				ast_log(LOG_NOTICE, "FSK_eof\n");
 				break;
 				}
-			ast_format_set(&f->subclass.format, AST_FORMAT_SLINEAR, 0);
+			f->subclass.format = ast_format_slin;
 			f->datalen = BLOCK_LEN;
 			f->samples = BLOCK_LEN / 2;
 			f->offset = AST_FRIENDLY_OFFSET;
@@ -365,130 +366,6 @@ if (silgen) ast_channel_stop_silence_generator(chan, silgen);
 free(in);
 return 0;
 }
-
-
-static int fskRX_exec_Hex(struct ast_channel *chan, const char *data){
-	fsk_rx_state_t *caller_rx;
-	receive_buffer_t *in;
-	char *argcopy = NULL;
-	struct ast_frame *f;
-	struct ast_flags flags = {0};
-	struct ast_silence_generator *silgen = NULL;
-	int16_t output_frame[BLOCK_LEN];
-	int modem;
-	int silence_flag=0;
-	int res=0;                       //Assume channel is answered
-
-
-	modem =  FSK_BELL103CH2;
-	memset(output_frame, 0, sizeof(output_frame));
-	AST_DECLARE_APP_ARGS(arglist,
-		AST_APP_ARG(variable);
-		AST_APP_ARG(options);
-		);
-	argcopy = ast_strdupa(data);
-	AST_STANDARD_APP_ARGS(arglist, argcopy);
-	if (ast_strlen_zero(data)) {
-		ast_log(LOG_WARNING, "ReceiveFSK requires at least a variable as argument\n");
-		return -1;
-		}
-	if (chan == NULL)          {
-		ast_log(LOG_ERROR, "ReceiveFSK channel is NULL. Giving up.\n");
-		return -1;
-		}
-	in= (receive_buffer_t *) malloc(sizeof(*in));
-	if (!ast_strlen_zero(arglist.options)) {
-		ast_debug(1,   "This instance has flags\n");
-		ast_app_parse_options(read_app_options, &flags, NULL, arglist.options);
-		if (ast_test_flag(&flags, OPT_HANGOUT )) in->quitoncarrierlost=0;
-		if (ast_test_flag(&flags, OPT_SILENCE )) silence_flag=1;
-		}
-
-	//check if channel is actually in answer state.
-	if (ast_channel_state(chan) != AST_STATE_UP) {
-		ast_log(LOG_WARNING, "Channel wasn't answered forece the answer.\n");
-		res = ast_answer(chan);
-		}
-	//final check is that channel answered?
-	if (!res) {
-		bx_builtin_setvar_helper(chan, arglist.variable, ""); //initialyze variable
-		st_debug(1, "Modem channel is  '%s'\n", preset_fsk_specs[modem].name);
-		if ((res = ast_set_read_format_by_id(chan, AST_FORMAT_SLINEAR)) < 0) {
-			ast_log(LOG_WARNING, "Unable to set channel to linear mode, giving up\n");
-			return -1;
-			}
-		in->FSK_eof=0;
-		in->quitoncarrierlost=1;
-
-		in->buffer= (char *) malloc(65536); memset(in->buffer, 0, 65536); //Reserve 64KB space for receive buffer and set to 0 its pointer.
-		in->ptr=0;
-		ast_debug(1, "output buffer allocated\n");
-
-		if (silence_flag) silgen = ast_channel_start_silence_generator(chan);
-		caller_rx = fsk_rx_init(NULL, &preset_fsk_specs[modem], FSK_FRAME_MODE_8N1_FRAMES, get_bit, in);
-		fsk_rx_set_modem_status_handler(caller_rx, rx_status, (void *) in);
-		while (ast_waitfor(chan, -1) > -1) {
-			f = ast_read(chan);
-			if (!f) {
-				res = -1;
-				break;
-				}
-			if (f->frametype == AST_FRAME_VOICE){
-				fsk_rx(caller_rx, f->data.ptr, f->samples);
-				}
-			if (in->FSK_eof!=0) {
-				ast_log(LOG_NOTICE, "FSK_eof\n");
-				break;
-				}
-			ast_format_set(&f->subclass.format, AST_FORMAT_SLINEAR, 0);
-			f->datalen = BLOCK_LEN;
-			f->samples = BLOCK_LEN / 2;
-			f->offset = AST_FRIENDLY_OFFSET;
-			f->src = __PRETTY_FUNCTION__;
-			f->data.ptr = &output_frame;
-			if (ast_write(chan, f) < 0) {
-				res = -1;
-				ast_frfree(f);
-				break;
-				}
-			ast_frfree(f);
-			}
-		if (!f) {
-			ast_debug(1, "Got hangup\n");
-			res = -1;
-			}
-		ast_debug(1, "received buffer is:%s\n",in->buffer);
-		pbx_builtin_setvar_helper(chan, arglist.variable, in->buffer);
-		free(in->buffer);
-		}
-if (silgen) ast_channel_stop_silence_generator(chan, silgen);
-free(in);
-return 0;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*
 		    ______	    _		   ____		    _
 		   |  ____|	   | |		  |  _ \	   (_)
@@ -506,7 +383,6 @@ static int unload_module(void) {
 	res =  ast_unregister_application(app_fskTX);
 	res |= ast_unregister_application(app_fskRX);
 	return res;
-//	return ast_unregister_application(app_fskTX) && ast_unregister_application(app_fskRX);
 }
 
 static int load_module(void) {
@@ -515,7 +391,6 @@ static int load_module(void) {
 	res =  ast_register_application_xml(app_fskTX, fskTX_exec);
 	res |= ast_register_application_xml(app_fskRX, fskRX_exec);
 	return res;
-//	return ast_register_application_xml(app_fskTX, fskTX_exec) && ast_register_application_xml(app_fskRX, fskRX_exec);
 }
 
 AST_MODULE_INFO_STANDARD(ASTERISK_GPL_KEY, "FSK util for Asterisk application");
