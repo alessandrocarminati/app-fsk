@@ -186,23 +186,25 @@ static int put_bit(transmit_buffer_t *user_data)
 {
 	int8_t data;
 
-	if (user_data->ptr<=user_data->bytes2send) {
+	if (user_data->ptr <= user_data->bytes2send) {
 		if ( (user_data->current_bit_no != 0) && (user_data->current_bit_no != 9) ) {
-			data=*((int8_t *)user_data->buffer + user_data->ptr)&(1<<(user_data->current_bit_no - 1));
+			data = *((int8_t *)user_data->buffer + user_data->ptr) & (1 << (user_data->current_bit_no - 1));
 		} else if (user_data->current_bit_no != 9) {
-			data=0;
+			data = 0;
 		} else {
-			data=1;
+			data = 1;
 		}
 		user_data->current_bit_no = ++user_data->current_bit_no;
 		if (user_data->current_bit_no == 10) {
 			user_data->ptr++;
 		}
 		if (user_data->current_bit_no == 10) {
-			user_data->current_bit_no=0;
+			user_data->current_bit_no = 0;
 		}
-		return data!=0?1:0;
-	} else return 1;
+		return data != 0 ? 1 : 0;
+	} else {
+		return 1;
+	}
 }
 
 static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK */
@@ -224,7 +226,7 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK *
 	struct ast_format * write_format;
 	int samples;
 	int modem;
-	int res=0;
+	int res = 0;
 
 	native_format = ast_format_cap_get_format(ast_channel_nativeformats(chan), 0);
 	sampling_rate = ast_format_get_sample_rate(native_format);
@@ -243,8 +245,8 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK *
 	out = (transmit_buffer_t *) malloc(sizeof(*out));
 	out->buffer = (char *) data;
 	out->bytes2send = strlen(data);
-	out->current_bit_no=0;
-	out->ptr=0;
+	out->current_bit_no = 0;
+	out->ptr = 0;
 	memset(caller_amp, 0, sizeof(*caller_amp));
 	caller_tx = fsk_tx_init(NULL, &preset_fsk_specs[modem], (get_bit_func_t) &put_bit, out);
 	while (out->ptr < out->bytes2send) {
@@ -290,8 +292,8 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 	struct ast_silence_generator *silgen = NULL;
 	int16_t output_frame[BLOCK_LEN];
 	int modem;
-	int silence_flag=0;
-	int res=0;
+	int silence_flag = 0;
+	int res = 0;
 
 	AST_DECLARE_APP_ARGS(arglist,
 		AST_APP_ARG(variable);
@@ -334,12 +336,12 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 			ast_log(LOG_WARNING, "Unable to set channel to linear mode, giving up\n");
 			return -1;
 		}
-		in->FSK_eof=0;
-		in->quitoncarrierlost=1;
+		in->FSK_eof = 0;
+		in->quitoncarrierlost = 1;
 
 		in->buffer= (char *) malloc(655536);
 		memset(in->buffer, 0, 655536); /* Reserve 64KB space for receive buffer and set to 0 its pointer. */
-		in->ptr=0;
+		in->ptr = 0;
 		ast_debug(1, "output buffer allocated\n");
 
 		if (silence_flag) {
@@ -356,7 +358,7 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 			if (f->frametype == AST_FRAME_VOICE){
 				fsk_rx(caller_rx, f->data.ptr, f->samples);
 			}
-			if (in->FSK_eof!=0) {
+			if (in->FSK_eof != 0) {
 				ast_log(LOG_NOTICE, "FSK_eof\n");
 				break;
 			}
