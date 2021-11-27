@@ -1,29 +1,29 @@
 /*
-	*  FSK util for Asterisk
-	*
-	*  Copyright (C) 2013-2021 Alessandro Carminati <alessandro.carminati@gmail.com>
-	*
-	*  This program is free software: you can redistribute it and/or modify
-	*  it under the terms of the GNU General Public License as published by
-	*  the Free Software Foundation, either version 3 of the License, or
-	*  (at your option) any later version.
-	*
-	*  This program is distributed in the hope that it will be useful,
-	*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-	*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	*  GNU General Public License for more details.
-	*
-	*  You should have received a copy of the GNU General Public License
-	*  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*  FSK util for Asterisk
+*
+*  Copyright (C) 2013-2021 Alessandro Carminati <alessandro.carminati@gmail.com>
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 /*! \file
-	*
-	* \brief App to Send/Receive fsk audio stream (Bell103)
-	*
-	* \author Alessandro Carminati <alessandro.carminati@gmail.com>
-	*
-	* \ingroup applications
+*
+* \brief App to Send/Receive fsk audio stream (Bell103)
+*
+* \author Alessandro Carminati <alessandro.carminati@gmail.com>
+*
+* \ingroup applications
 */
 
 /*** MODULEINFO
@@ -49,18 +49,18 @@
 
 /*#include <spandsp-sim.h>*/
 #if !defined(_SPANDSP_SIM_H_)
-	#define _SPANDSP_SIM_H_
+#define _SPANDSP_SIM_H_
 
-	#include <inttypes.h>
-	#include <limits.h>
-	#include <time.h>
-	#include <tiffio.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <time.h>
+#include <tiffio.h>
 
-	#include <spandsp/g1050.h>
-	#include <spandsp/rfc2198_sim.h>
-	#include <spandsp/test_utils.h>
-	#include <spandsp/line_model.h>
-	#include <spandsp/line_models.h>
+#include <spandsp/g1050.h>
+#include <spandsp/rfc2198_sim.h>
+#include <spandsp/test_utils.h>
+#include <spandsp/line_model.h>
+#include <spandsp/line_models.h>
 
 #endif
 /* end include */
@@ -97,13 +97,13 @@
 		</synopsis>
 		<syntax>
 			<parameter name="options">
-			<optionlist>
-				<option name="h">
-					<para>Receive frames until it got an hangup. Default behaviour is to stop receiving on carrier loss.</para>
-				</option>
-				<option name="s">
-					<para>Generate silence back to caller. Default behaviour is generate no stream. this can some applications missbehave.</para>
-				</option>
+				<optionlist>
+					<option name="h">
+						<para>Receive frames until it got an hangup. Default behaviour is to stop receiving on carrier loss.</para>
+					</option>
+					<option name="s">
+						<para>Generate silence back to caller. Default behaviour is generate no stream. this can some applications missbehave.</para>
+					</option>
 				</optionlist>
 			</parameter>
 		<syntax>
@@ -116,6 +116,7 @@
 		</see-also>
 	</application>
 ***/
+
 enum read_option_flags {
 	OPT_HANGOUT    = (1 << 0),
 	OPT_SILENCE    = (1 << 1),
@@ -136,18 +137,21 @@ AST_APP_OPTIONS(read_app_options, {
 	AST_APP_OPTION('6', OPT_OPT6),
 	AST_APP_OPTION('7', OPT_OPT7),
 });
+
 struct receive_buffer_s {
 	int ptr;
 	int quitoncarrierlost;
 	int FSK_eof;
 	char *buffer;
 };
+
 struct transmit_buffer_s {
 	int ptr;
 	int bytes2send;
 	int current_bit_no;
 	char *buffer;
 };
+
 typedef struct transmit_buffer_s transmit_buffer_t;
 typedef struct receive_buffer_s  receive_buffer_t;
 
