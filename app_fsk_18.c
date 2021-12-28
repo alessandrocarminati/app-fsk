@@ -194,7 +194,7 @@ static int put_bit(transmit_buffer_t *user_data)
 		} else {
 			data = 1;
 		}
-		user_data->current_bit_no = ++user_data->current_bit_no;
+		++user_data->current_bit_no;
 		if (user_data->current_bit_no == 10) {
 			user_data->ptr++;
 		}
@@ -242,7 +242,7 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK *
 		return -1;
 	}
 	modem = FSK_BELL202;
-	out = (transmit_buffer_t *) malloc(sizeof(*out));
+	out = (transmit_buffer_t *) ast_malloc(sizeof(*out));
 	out->buffer = (char *) data;
 	out->bytes2send = strlen(data);
 	out->current_bit_no = 0;
@@ -313,7 +313,7 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 		ast_log(LOG_ERROR, "ReceiveFSK channel is NULL. Giving up.\n");
 		return -1;
 	}
-	in= (receive_buffer_t *) malloc(sizeof(*in));
+	in= (receive_buffer_t *) ast_malloc(sizeof(*in));
 	if (!ast_strlen_zero(arglist.options)) {
 		ast_debug(1, "This instance has flags\n");
 		ast_app_parse_options(read_app_options, &flags, NULL, arglist.options);
@@ -339,7 +339,7 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 		in->FSK_eof = 0;
 		in->quitoncarrierlost = 1;
 
-		in->buffer= (char *) malloc(655536);
+		in->buffer= (char *) ast_malloc(655536);
 		memset(in->buffer, 0, 655536); /* Reserve 64KB space for receive buffer and set to 0 its pointer. */
 		in->ptr = 0;
 		ast_debug(1, "output buffer allocated\n");
@@ -381,12 +381,12 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 		}
 		ast_debug(1, "received buffer is: %s\n",in->buffer);
 		pbx_builtin_setvar_helper(chan, arglist.variable, in->buffer);
-		free(in->buffer);
+		ast_free(in->buffer);
 	}
 	if (silgen) {
 		ast_channel_stop_silence_generator(chan, silgen);
 	}
-	free(in);
+	ast_free(in);
 	return 0;
 }
 
