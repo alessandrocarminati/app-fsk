@@ -88,7 +88,7 @@
 					</option>
 				</optionlist>
 			</parameter>
-		<syntax>
+		</syntax>
 		<description>
 			<para>ReceiveFSK() is an utility to receive digital messages from an audio channel</para>
 			<para>This application will answer the channel if it has not yet been answered.</para>
