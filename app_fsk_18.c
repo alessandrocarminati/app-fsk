@@ -47,24 +47,6 @@
 #include <spandsp.h>
 #include <spandsp/version.h>
 
-/*#include <spandsp-sim.h>*/
-#if !defined(_SPANDSP_SIM_H_)
-#define _SPANDSP_SIM_H_
-
-#include <inttypes.h>
-#include <limits.h>
-#include <time.h>
-#include <tiffio.h>
-
-#include <spandsp/g1050.h>
-#include <spandsp/rfc2198_sim.h>
-#include <spandsp/test_utils.h>
-#include <spandsp/line_model.h>
-#include <spandsp/line_models.h>
-
-#endif
-/* end include */
-
 #define BLOCK_LEN           160
 
 #include "asterisk/lock.h"
