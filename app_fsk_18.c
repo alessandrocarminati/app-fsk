@@ -47,6 +47,10 @@
 #include <spandsp.h>
 #include <spandsp/version.h>
 
+#ifndef FSK_FRAME_MODE_8N1_FRAMES /* was removed from spandsp */
+#define FSK_FRAME_MODE_8N1_FRAMES 10
+#endif
+
 #define BLOCK_LEN           160
 
 #include "asterisk/lock.h"
@@ -63,25 +67,25 @@
 /*** DOCUMENTATION
 	<application name="SendFSK" language="en_US">
 		<synopsis>
-			Send fsk message over audio channel.
+			Send FSK message over audio channel.
 		</synopsis>
 		<syntax />
 		<description>
 			<para>SendFSK() is an utility to send digital messages over an audio channel</para>
 		</description>
 		<see-also>
-			<ref type="application">SendFSK</ref>
+			<ref type="application">ReceiveFSK</ref>
 		</see-also>
 	</application>
 	<application name="ReceiveFSK" language="en_US">
 		<synopsis>
-			Receive fsk message from audio channel.
+			Receive FSK message from audio channel.
 		</synopsis>
 		<syntax>
 			<parameter name="options">
 				<optionlist>
 					<option name="h">
-						<para>Receive frames until it got an hangup. Default behaviour is to stop receiving on carrier loss.</para>
+						<para>Receive frames until it gets a hangup. Default behaviour is to stop receiving on carrier loss.</para>
 					</option>
 					<option name="s">
 						<para>Generate silence back to caller. Default behaviour is generate no stream. this can some applications missbehave.</para>
@@ -94,7 +98,7 @@
 			<para>This application will answer the channel if it has not yet been answered.</para>
 		</description>
 		<see-also>
-			<ref type="application">ReceiveFSK</ref>
+			<ref type="application">SendFSK</ref>
 		</see-also>
 	</application>
 ***/
@@ -321,8 +325,8 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 		in->FSK_eof = 0;
 		in->quitoncarrierlost = 1;
 
-		in->buffer= (char *) ast_malloc(655536);
-		memset(in->buffer, 0, 655536); /* Reserve 64KB space for receive buffer and set to 0 its pointer. */
+		in->buffer= (char *) ast_malloc(65536);
+		memset(in->buffer, 0, 65536); /* Reserve 64KB space for receive buffer and set to 0 its pointer. */
 		in->ptr = 0;
 		ast_debug(1, "output buffer allocated\n");
 
