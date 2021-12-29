@@ -69,7 +69,19 @@
 		<synopsis>
 			Send FSK message over audio channel.
 		</synopsis>
-		<syntax />
+		<syntax>
+			<parameter name="modem" required="no">
+				<para>Name of modem protocol to use. Default is Bell 103.</para>
+				<enumlist>
+					<enum name="103">
+						<para>Bell 103 modem (300 baud), originating side</para>
+					</enum>
+					<enum name="202">
+						<para>Bell 202 modem (1200 baud)</para>
+					</enum>
+				</enumlist>
+			</parameter>
+		</syntax>
 		<description>
 			<para>SendFSK() is an utility to send digital messages over an audio channel</para>
 		</description>
@@ -82,13 +94,27 @@
 			Receive FSK message from audio channel.
 		</synopsis>
 		<syntax>
-			<parameter name="options">
+			<parameter name="variable" required="yes">
+				<para>Name of variable in which to save the received data.</para>
+			</parameter>
+			<parameter name="modem" required="no">
+				<para>Name of modem protocol to use. Default is Bell 103.</para>
+				<enumlist>
+					<enum name="103">
+						<para>Bell 103 modem (300 baud), terminating side</para>
+					</enum>
+					<enum name="202">
+						<para>Bell 202 modem (1200 baud)</para>
+					</enum>
+				</enumlist>
+			</parameter>
+			<parameter name="options" required="no">
 				<optionlist>
 					<option name="h">
 						<para>Receive frames until it gets a hangup. Default behaviour is to stop receiving on carrier loss.</para>
 					</option>
 					<option name="s">
-						<para>Generate silence back to caller. Default behaviour is generate no stream. this can some applications missbehave.</para>
+						<para>Generate silence back to caller. Default behaviour is generate no stream. This can cause some applications to misbehave.</para>
 					</option>
 				</optionlist>
 			</parameter>
@@ -106,22 +132,11 @@
 enum read_option_flags {
 	OPT_HANGOUT    = (1 << 0),
 	OPT_SILENCE    = (1 << 1),
-	OPT_OPT2       = (1 << 2),
-	OPT_OPT3       = (1 << 3),
-	OPT_OPT4       = (1 << 4),
-	OPT_OPT5       = (1 << 5),
-	OPT_OPT6       = (1 << 6),
-	OPT_OPT7       = (1 << 7),
 };
+
 AST_APP_OPTIONS(read_app_options, {
 	AST_APP_OPTION('h', OPT_HANGOUT),
 	AST_APP_OPTION('s', OPT_SILENCE),
-	AST_APP_OPTION('2', OPT_OPT2),
-	AST_APP_OPTION('3', OPT_OPT3),
-	AST_APP_OPTION('4', OPT_OPT4),
-	AST_APP_OPTION('5', OPT_OPT5),
-	AST_APP_OPTION('6', OPT_OPT6),
-	AST_APP_OPTION('7', OPT_OPT7),
 });
 
 struct receive_buffer_s {
@@ -148,7 +163,7 @@ static void rx_status(void *user_data, int status){
 	receive_buffer_t *data;
 
 	data = (receive_buffer_t *) user_data;
-	ast_log(LOG_NOTICE,  "FSK rx status is %s (%d)\n", signal_status_to_str(status), status);
+	ast_debug(1, "FSK rx status is %s (%d)\n", signal_status_to_str(status), status);
 	if ((status == -1) && (data->quitoncarrierlost)) {
 		data->FSK_eof = 1;
 	}
@@ -195,7 +210,7 @@ static int put_bit(transmit_buffer_t *user_data)
 
 static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK */
 	typedef struct ast_frame ast_frame_t;
-
+	char *argcopy = NULL;
 	fsk_tx_state_t *caller_tx;
 	transmit_buffer_t *out;
 	int16_t caller_amp[BLOCK_LEN];
@@ -214,6 +229,11 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK *
 	int modem;
 	int res = 0;
 
+	AST_DECLARE_APP_ARGS(arglist,
+		AST_APP_ARG(modem);
+		AST_APP_ARG(data);
+	);
+
 	native_format = ast_format_cap_get_format(ast_channel_nativeformats(chan), 0);
 	sampling_rate = ast_format_get_sample_rate(native_format);
 	write_format = ast_format_cache_get_slin_by_rate(sampling_rate);
@@ -227,10 +247,27 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK *
 		ast_log(LOG_ERROR, "SendFSK channel is NULL. Giving up.\n");
 		return -1;
 	}
-	modem = FSK_BELL202;
+
+	argcopy = ast_strdupa(data);
+	AST_STANDARD_APP_ARGS(arglist, argcopy);
+
+	modem = FSK_BELL103CH1;
+	if (!ast_strlen_zero(arglist.modem)) {
+		if (!strcmp(arglist.modem, "103")) {
+			modem = FSK_BELL103CH1;
+		} else if (!strcmp(arglist.modem, "202")) {
+			modem = FSK_BELL202;
+		} else {
+			ast_log(LOG_WARNING, "Unknown modem protocol: %s\n", arglist.modem);
+			return -1;
+		}
+	}
+
+	ast_debug(1, "Modem channel is '%s'\n", preset_fsk_specs[modem].name);
+
 	out = (transmit_buffer_t *) ast_malloc(sizeof(*out));
-	out->buffer = (char *) data;
-	out->bytes2send = strlen(data);
+	out->buffer = (char *) arglist.data;
+	out->bytes2send = strlen(arglist.data);
 	out->current_bit_no = 0;
 	out->ptr = 0;
 	memset(caller_amp, 0, sizeof(*caller_amp));
@@ -239,7 +276,7 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK *
 		res = ast_waitfor(chan, 1000);
 		fr = ast_read(chan);
 		if (!fr) {
-			ast_log(LOG_WARNING, "Null frame == hangup() detected\n");
+			ast_debug(1, "Null == hangup() detected\n");
 			res = -1;
 			break;
 		}
@@ -265,7 +302,7 @@ static int fskTX_exec(struct ast_channel *chan, const char *data) { /* SendFSK *
 	} else {
 		ast_log(LOG_WARNING, "ast_read returned NULL value.\n");
 	}
-	ast_log(LOG_NOTICE, "SendFSK Completed.\n");
+	ast_debug(1, "SendFSK Completed.\n");
 	return 0;
 }
 
@@ -283,11 +320,9 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 
 	AST_DECLARE_APP_ARGS(arglist,
 		AST_APP_ARG(variable);
+		AST_APP_ARG(modem);
 		AST_APP_ARG(options);
 	);
-
-	modem =  FSK_BELL202;
-	memset(output_frame, 0, sizeof(output_frame));
 
 	argcopy = ast_strdupa(data);
 	AST_STANDARD_APP_ARGS(arglist, argcopy);
@@ -299,7 +334,36 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 		ast_log(LOG_ERROR, "ReceiveFSK channel is NULL. Giving up.\n");
 		return -1;
 	}
-	in= (receive_buffer_t *) ast_malloc(sizeof(*in));
+	if (ast_channel_state(chan) != AST_STATE_UP) { /* answer channel if unanswered */
+		res = ast_answer(chan);
+		if (res) {
+			ast_log(LOG_WARNING, "Failed to answer channel\n");
+			return -1;
+		}
+	}
+
+	modem = FSK_BELL103CH2;
+	if (!ast_strlen_zero(arglist.modem)) {
+		if (!strcmp(arglist.modem, "103")) {
+			modem = FSK_BELL103CH2;
+		} else if (!strcmp(arglist.modem, "202")) {
+			modem = FSK_BELL202;
+		} else {
+			ast_log(LOG_WARNING, "Unknown modem protocol: %s\n", arglist.modem);
+			return -1;
+		}
+	}
+
+	pbx_builtin_setvar_helper(chan, arglist.variable, ""); /* initialize variable */
+	ast_debug(1, "Modem channel is '%s'\n", preset_fsk_specs[modem].name);
+	if ((res = ast_set_read_format(chan, ast_format_slin)) < 0) {
+		ast_log(LOG_WARNING, "Unable to set channel to linear mode, giving up\n");
+		return -1;
+	}
+
+	memset(output_frame, 0, sizeof(output_frame));
+	in = (receive_buffer_t *) ast_malloc(sizeof(*in));
+
 	if (!ast_strlen_zero(arglist.options)) {
 		ast_debug(1, "This instance has flags\n");
 		ast_app_parse_options(read_app_options, &flags, NULL, arglist.options);
@@ -311,64 +375,52 @@ static int fskRX_exec(struct ast_channel *chan, const char *data) { /* ReceiveFS
 		}
 	}
 
-	if (ast_channel_state(chan) != AST_STATE_UP) { /* answer channel if unanswered */
-		res = ast_answer(chan);
+	in->FSK_eof = 0;
+	in->quitoncarrierlost = 1;
+
+	in->buffer = (char *) ast_malloc(65536);
+	memset(in->buffer, 0, 65536); /* Reserve 64KB space for receive buffer and set to 0 its pointer. */
+	in->ptr = 0;
+	ast_debug(1, "output buffer allocated\n");
+
+	if (silence_flag) {
+		silgen = ast_channel_start_silence_generator(chan);
 	}
-
-	if (!res) {
-		pbx_builtin_setvar_helper(chan, arglist.variable, ""); /* initialize variable */
-		ast_debug(1, "Modem channel is  '%s'\n", preset_fsk_specs[modem].name);
-		if ((res = ast_set_read_format(chan, ast_format_slin)) < 0) {
-			ast_log(LOG_WARNING, "Unable to set channel to linear mode, giving up\n");
-			return -1;
-		}
-		in->FSK_eof = 0;
-		in->quitoncarrierlost = 1;
-
-		in->buffer= (char *) ast_malloc(65536);
-		memset(in->buffer, 0, 65536); /* Reserve 64KB space for receive buffer and set to 0 its pointer. */
-		in->ptr = 0;
-		ast_debug(1, "output buffer allocated\n");
-
-		if (silence_flag) {
-			silgen = ast_channel_start_silence_generator(chan);
-		}
-		caller_rx = fsk_rx_init(NULL, &preset_fsk_specs[modem], FSK_FRAME_MODE_8N1_FRAMES, get_bit, in);
-		fsk_rx_set_modem_status_handler(caller_rx, rx_status, (void *) in);
-		while (ast_waitfor(chan, -1) > -1) {
-			f = ast_read(chan);
-			if (!f) {
-				res = -1;
-				break;
-			}
-			if (f->frametype == AST_FRAME_VOICE){
-				fsk_rx(caller_rx, f->data.ptr, f->samples);
-			}
-			if (in->FSK_eof != 0) {
-				ast_log(LOG_NOTICE, "FSK_eof\n");
-				break;
-			}
-			f->subclass.format = ast_format_slin;
-			f->datalen = BLOCK_LEN;
-			f->samples = BLOCK_LEN / 2;
-			f->offset = AST_FRIENDLY_OFFSET;
-			f->src = __PRETTY_FUNCTION__;
-			f->data.ptr = &output_frame;
-			if (ast_write(chan, f) < 0) {
-				res = -1;
-				ast_frfree(f);
-				break;
-			}
-			ast_frfree(f);
-		}
+	caller_rx = fsk_rx_init(NULL, &preset_fsk_specs[modem], FSK_FRAME_MODE_8N1_FRAMES, get_bit, in);
+	fsk_rx_set_modem_status_handler(caller_rx, rx_status, (void *) in);
+	while (ast_waitfor(chan, -1) > -1) {
+		f = ast_read(chan);
 		if (!f) {
-			ast_debug(1, "Got hangup\n");
 			res = -1;
+			break;
 		}
-		ast_debug(1, "received buffer is: %s\n",in->buffer);
-		pbx_builtin_setvar_helper(chan, arglist.variable, in->buffer);
-		ast_free(in->buffer);
+		if (f->frametype == AST_FRAME_VOICE){
+			fsk_rx(caller_rx, f->data.ptr, f->samples);
+		}
+		if (in->FSK_eof != 0) {
+			ast_log(LOG_NOTICE, "FSK_eof\n");
+			break;
+		}
+		f->subclass.format = ast_format_slin;
+		f->datalen = BLOCK_LEN;
+		f->samples = BLOCK_LEN / 2;
+		f->offset = AST_FRIENDLY_OFFSET;
+		f->src = __PRETTY_FUNCTION__;
+		f->data.ptr = &output_frame;
+		if (ast_write(chan, f) < 0) {
+			res = -1;
+			ast_frfree(f);
+			break;
+		}
+		ast_frfree(f);
 	}
+	if (!f) {
+		ast_debug(1, "Got hangup\n");
+		res = -1;
+	}
+	ast_debug(1, "received buffer is: %s\n", in->buffer);
+	pbx_builtin_setvar_helper(chan, arglist.variable, in->buffer);
+	ast_free(in->buffer);
 	if (silgen) {
 		ast_channel_stop_silence_generator(chan, silgen);
 	}
